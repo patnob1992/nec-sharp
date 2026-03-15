@@ -7,26 +7,52 @@ import { supabase } from "@/lib/supabase";
 export default function LoginPage() {
   const router = useRouter();
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const [authMode, setAuthMode] = useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     emailInputRef.current?.focus();
   }, []);
 
+  function getFriendlyAuthError(message: string): string {
+    const lower = message.toLowerCase();
+    if (lower.includes("invalid login credentials")) {
+      return "Email or password is incorrect. Try again.";
+    }
+    if (lower.includes("email not confirmed")) {
+      return "Please confirm your email before signing in.";
+    }
+    if (lower.includes("already registered")) {
+      return "This email is already registered. Try signing in.";
+    }
+    return message;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } =
+      authMode === "signIn"
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password });
 
     setLoading(false);
 
     if (error) {
-      setErrorMsg(error.message);
+      setErrorMsg(getFriendlyAuthError(error.message));
+      return;
+    }
+
+    if (authMode === "signUp") {
+      setSuccessMsg("Account created. Check your email to confirm your account before signing in.");
+      setPassword("");
       return;
     }
 
@@ -123,7 +149,7 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           type="password"
           required
-          autoComplete="current-password"
+          autoComplete={authMode === "signIn" ? "current-password" : "new-password"}
           style={{
             width: "100%",
             padding: 14,
@@ -148,6 +174,34 @@ export default function LoginPage() {
 
         {errorMsg ? (
           <div style={{ color: "var(--nec-danger)", marginBottom: 16, fontSize: 14 }}>{errorMsg}</div>
+        ) : null}
+        {successMsg ? (
+          <div
+            style={{
+              color: "var(--nec-blue2)",
+              marginBottom: 16,
+              fontSize: 13,
+              lineHeight: 1.5,
+              textAlign: "center",
+            }}
+          >
+            <div>{successMsg}</div>
+            <button
+              type="button"
+              disabled
+              style={{
+                marginTop: 8,
+                background: "none",
+                border: "none",
+                color: "var(--nec-muted2)",
+                fontSize: 12,
+                cursor: "not-allowed",
+                textDecoration: "underline",
+              }}
+            >
+              Resend confirmation email (coming soon)
+            </button>
+          </div>
         ) : null}
 
         <button
@@ -178,7 +232,27 @@ export default function LoginPage() {
             e.currentTarget.style.boxShadow = "var(--nec-shadow-3)";
           }}
         >
-          {loading ? "Entering..." : "▶ Enter Training"}
+          {loading ? (authMode === "signIn" ? "Entering..." : "Creating...") : authMode === "signIn" ? "Enter Training" : "Create Account"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthMode((m) => (m === "signIn" ? "signUp" : "signIn"));
+            setErrorMsg(null);
+            setSuccessMsg(null);
+          }}
+          style={{
+            marginTop: 12,
+            width: "100%",
+            background: "none",
+            border: "none",
+            color: "var(--nec-muted2)",
+            fontSize: 13,
+            cursor: "pointer",
+            textDecoration: "underline",
+          }}
+        >
+          {authMode === "signIn" ? "New here? Create account" : "Already have an account? Sign in"}
         </button>
 
         <p style={{ marginTop: 16, fontSize: 12, color: "var(--nec-muted2)", textAlign: "center" }}>
