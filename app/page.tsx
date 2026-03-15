@@ -617,8 +617,6 @@ export default function Home() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sessionQuestionIds, setSessionQuestionIds] = useState<string[]>([])
   const [questionIndex, setQuestionIndex] = useState(0)
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null)
-  const [nextQuestion, setNextQuestion] = useState<Question | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [hasSubmitted, setHasSubmitted] = useState(false)
   const [isQuestionTransitioning, setIsQuestionTransitioning] = useState(false)
@@ -638,11 +636,10 @@ export default function Home() {
   const questionsRef = useRef<Question[]>([])
   const sessionStartedLoggedRef = useRef(false)
   const userRef = useRef<string | null>(null)
-  const optionOrderCacheRef = useRef<Map<string, { options: string[]; correctIndex: number }>>(new Map())
 
   const dayKey = getDayKey()
   const currentQuestionId = sessionQuestionIds[questionIndex]
-  const question = currentQuestion
+  const question = currentQuestionId ? getQuestionById(questions, currentQuestionId) : null
   const sessionSize = sessionQuestionIds.length
 
   questionsRef.current = questions
@@ -661,50 +658,19 @@ export default function Home() {
   }, [hasSubmitted, selected, question, effectiveCorrectIndex])
 
   useEffect(() => {
-    const currentId = sessionQuestionIds[questionIndex]
-    const nextId = sessionQuestionIds[questionIndex + 1]
-    setCurrentQuestion(currentId ? getQuestionById(questions, currentId) : null)
-    setNextQuestion(nextId ? getQuestionById(questions, nextId) : null)
-  }, [questionIndex, sessionQuestionIds, questionsKey])
-
-  useEffect(() => {
     if (!question) return
-    const cached = optionOrderCacheRef.current.get(question.id)
-    if (cached) {
-      setShuffledOptions(cached.options)
-      setShuffledCorrectIndex(cached.correctIndex)
-    } else {
-      const dailySeed = getOrCreateOptionSeed(dayKey)
-      const perQuestionSeed = hashStringToUint32(dailySeed + "::" + question.id)
-      const rng = mulberry32(perQuestionSeed)
-      const indices = question.options.map((_, i) => i)
-      const shuffledIndices = shuffleWithRng(indices, rng)
-      const shuffled = shuffledIndices.map((i) => question.options[i])
-      const correctIdx = shuffledIndices.indexOf(question.correctIndex)
-      const bundle = { options: shuffled, correctIndex: correctIdx >= 0 ? correctIdx : 0 }
-      optionOrderCacheRef.current.set(question.id, bundle)
-      setShuffledOptions(bundle.options)
-      setShuffledCorrectIndex(bundle.correctIndex)
-    }
+    const dailySeed = getOrCreateOptionSeed(dayKey)
+    const perQuestionSeed = hashStringToUint32(dailySeed + "::" + question.id)
+    const rng = mulberry32(perQuestionSeed)
+    const indices = question.options.map((_, i) => i)
+    const shuffledIndices = shuffleWithRng(indices, rng)
+    const shuffled = shuffledIndices.map((i) => question.options[i])
+    const correctIdx = shuffledIndices.indexOf(question.correctIndex)
+    setShuffledOptions(shuffled)
+    setShuffledCorrectIndex(correctIdx >= 0 ? correctIdx : 0)
     setShuffledForQuestionId(question.id)
     setSelected(null)
   }, [currentQuestionId, question, dayKey])
-
-  useEffect(() => {
-    if (!nextQuestion) return
-    if (optionOrderCacheRef.current.has(nextQuestion.id)) return
-    const dailySeed = getOrCreateOptionSeed(dayKey)
-    const perQuestionSeed = hashStringToUint32(dailySeed + "::" + nextQuestion.id)
-    const rng = mulberry32(perQuestionSeed)
-    const indices = nextQuestion.options.map((_, i) => i)
-    const shuffledIndices = shuffleWithRng(indices, rng)
-    const shuffled = shuffledIndices.map((i) => nextQuestion.options[i])
-    const correctIdx = shuffledIndices.indexOf(nextQuestion.correctIndex)
-    optionOrderCacheRef.current.set(nextQuestion.id, {
-      options: shuffled,
-      correctIndex: correctIdx >= 0 ? correctIdx : 0,
-    })
-  }, [nextQuestion, dayKey])
 
   useEffect(() => {
     if (selected === null) {
@@ -1043,29 +1009,10 @@ export default function Home() {
   const handleNextQuestion = useCallback(async () => {
     if (isQuestionTransitioning) return
     setIsQuestionTransitioning(true)
-    if (nextQuestion) {
-      setCurrentQuestion(nextQuestion)
-      const upcomingId = sessionQuestionIds[questionIndex + 2]
-      const upcomingQuestion = upcomingId ? getQuestionById(questionsRef.current, upcomingId) : null
-      setNextQuestion(upcomingQuestion)
-      if (upcomingQuestion && !optionOrderCacheRef.current.has(upcomingQuestion.id)) {
-        const dailySeed = getOrCreateOptionSeed(dayKey)
-        const perQuestionSeed = hashStringToUint32(dailySeed + "::" + upcomingQuestion.id)
-        const rng = mulberry32(perQuestionSeed)
-        const indices = upcomingQuestion.options.map((_, i) => i)
-        const shuffledIndices = shuffleWithRng(indices, rng)
-        const shuffled = shuffledIndices.map((i) => upcomingQuestion.options[i])
-        const correctIdx = shuffledIndices.indexOf(upcomingQuestion.correctIndex)
-        optionOrderCacheRef.current.set(upcomingQuestion.id, {
-          options: shuffled,
-          correctIndex: correctIdx >= 0 ? correctIdx : 0,
-        })
-      }
-    }
     await new Promise((resolve) => setTimeout(resolve, 150))
     await advanceToNext()
     setTimeout(() => setIsQuestionTransitioning(false), 150)
-  }, [advanceToNext, isQuestionTransitioning, nextQuestion, questionIndex, sessionQuestionIds, dayKey])
+  }, [advanceToNext, isQuestionTransitioning])
 
   const startReviewMissed = () => {
     if (missedIds.length === 0) return
