@@ -62,10 +62,10 @@ export default function LoginPage() {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "grid",
         placeItems: "center",
-        padding: 24,
+        padding: "16px 14px 24px",
         background: "linear-gradient(180deg, var(--nec-bg) 0%, var(--nec-bg2) 100%)",
         fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
         position: "relative",
@@ -77,7 +77,7 @@ export default function LoginPage() {
         style={{
           width: "100%",
           maxWidth: 420,
-          padding: 40,
+          padding: "clamp(24px, 6vw, 40px)",
           borderRadius: 20,
           background: "var(--nec-card)",
           border: "1px solid var(--nec-border)",
@@ -86,7 +86,7 @@ export default function LoginPage() {
           zIndex: 1,
         }}
       >
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{ textAlign: "center", marginBottom: "clamp(24px, 6vw, 40px)" }}>
           <div style={{ fontSize: 14, color: "var(--nec-gold)", marginBottom: 8, letterSpacing: "0.05em" }}>
             ⚡
           </div>
@@ -122,12 +122,13 @@ export default function LoginPage() {
           style={{
             width: "100%",
             padding: 14,
+            minHeight: 52,
             borderRadius: 12,
-            marginBottom: 20,
+            marginBottom: "clamp(14px, 4vw, 20px)",
             background: "rgba(0,0,0,0.35)",
             border: "1px solid var(--nec-border)",
             color: "white",
-            fontSize: 15,
+            fontSize: 16,
             boxSizing: "border-box",
           }}
           onFocus={(e) => {
@@ -153,12 +154,13 @@ export default function LoginPage() {
           style={{
             width: "100%",
             padding: 14,
+            minHeight: 52,
             borderRadius: 12,
-            marginBottom: 28,
+            marginBottom: "clamp(20px, 5vw, 28px)",
             background: "rgba(0,0,0,0.35)",
             border: "1px solid var(--nec-border)",
             color: "white",
-            fontSize: 15,
+            fontSize: 16,
             boxSizing: "border-box",
           }}
           onFocus={(e) => {
@@ -211,6 +213,7 @@ export default function LoginPage() {
           style={{
             width: "100%",
             padding: 18,
+            minHeight: 54,
             borderRadius: 14,
             background: "linear-gradient(180deg, rgba(59,130,255,0.15) 0%, var(--nec-blue) 30%, var(--nec-blue) 100%)",
             color: "white",
