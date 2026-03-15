@@ -1,0 +1,391 @@
+@import "tailwindcss";
+
+/* NEC Sharp — Electric Blue + Gold Design Tokens */
+:root {
+  /* Base Surfaces */
+  --nec-bg: #0B1220;
+  --nec-bg2: #0A0F1A;
+  --nec-card: #121A2B;
+  --nec-card2: #0F172A;
+  --nec-border: rgba(255,255,255,0.08);
+  --nec-border2: rgba(30,107,255,0.20);
+
+  /* Text */
+  --nec-text: rgba(255,255,255,0.92);
+  --nec-muted: rgba(255,255,255,0.62);
+  --nec-muted2: rgba(255,255,255,0.45);
+
+  /* Brand — Electric Blue (Action) */
+  --nec-blue: #1E6BFF;
+  --nec-blue2: #3B82FF;
+  --nec-blueGlow: rgba(30,107,255,0.16);
+
+  /* Brand — Gold (Achievement) */
+  --nec-gold: #C6A84A;
+  --nec-gold2: #E6C76B;
+  --nec-goldGlow: rgba(198,168,74,0.14);
+
+  /* Status */
+  --nec-danger: #EF4444;
+  --nec-dangerGlow: rgba(239,68,68,0.18);
+
+  /* Depth (shadow levels) */
+  --nec-shadow-1: 0 8px 32px rgba(0,0,0,0.35);
+  --nec-shadow-2: 0 12px 40px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.06);
+  --nec-shadow-3: 0 8px 32px rgba(0,0,0,0.4), 0 0 24px var(--nec-blueGlow);
+
+  /* Legacy Tailwind */
+  --background: #0B1220;
+  --foreground: var(--nec-text);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(180deg, var(--nec-bg) 0%, var(--nec-bg2) 100%);
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none !important;
+  z-index: 0;
+}
+
+body {
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes streakGlow {
+  0%   { box-shadow: 0 0 0 rgba(255,255,255,0.0); }
+  50%  { box-shadow: 0 0 18px rgba(255,255,255,0.14); }
+  100% { box-shadow: 0 0 0 rgba(255,255,255,0.0); }
+}
+
+@keyframes streakPopIn {
+  0%   { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.streak-badge {
+  animation: streakPopIn 250ms ease-out forwards;
+}
+
+.streak-badge.streak-glow {
+  animation: streakPopIn 250ms ease-out forwards, streakGlow 1.8s ease-in-out infinite;
+}
+
+@keyframes perfectBadgePulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(212,175,55,0.25); }
+  50%      { box-shadow: 0 0 16px rgba(212,175,55,0.4); }
+}
+
+@keyframes milestoneCardGlow {
+  0%   { box-shadow: 0 20px 60px rgba(0,0,0,0.45); }
+  30%  { box-shadow: 0 20px 60px rgba(0,0,0,0.45), 0 0 24px rgba(255,255,255,0.08); }
+  100% { box-shadow: 0 20px 60px rgba(0,0,0,0.45); }
+}
+
+@keyframes streakShimmer {
+  0%   { box-shadow: 0 0 0 rgba(212,175,55,0.25); }
+  50%  { box-shadow: 0 0 12px rgba(212,175,55,0.35); }
+  100% { box-shadow: 0 0 0 rgba(212,175,55,0.25); }
+}
+
+@keyframes betaBadgePulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(96,165,250,0.0); }
+  50% { box-shadow: 0 0 12px rgba(96,165,250,0.25); }
+}
+
+.beta-feedback-badge {
+  animation: betaBadgePulse 6s ease-in-out infinite;
+}
+
+@keyframes levelUpPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(251,191,36,0.3); opacity: 1; }
+  50%      { box-shadow: 0 0 24px rgba(251,191,36,0.5); opacity: 0.95; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-badge,
+  .streak-badge.streak-glow,
+  .perfect-badge,
+  .milestone-card-glow,
+  .streak-tier-legend,
+  .level-up-banner {
+    animation: none !important;
+  }
+}
+
+.level-up-banner {
+  animation: streakPopIn 300ms ease-out forwards, levelUpPulse 1.5s ease-in-out 2;
+}
+
+.perfect-badge {
+  animation: streakPopIn 250ms ease-out forwards, perfectBadgePulse 1s ease-in-out;
+}
+
+.milestone-card-glow {
+  animation: milestoneCardGlow 1.2s ease-out forwards;
+}
+
+/* 1-2: subtle gray badge */
+.streak-tier-minimal {
+  box-shadow: 0 0 4px rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08) !important;
+  background: rgba(255,255,255,0.04) !important;
+}
+/* 3-6: current glow style */
+.streak-tier-small {
+  box-shadow: 0 0 10px rgba(255,255,255,0.1);
+}
+/* 7-13: slightly stronger glow */
+.streak-tier-medium {
+  box-shadow: 0 0 14px rgba(255,255,255,0.12);
+}
+/* 14-29: faint blue accent border */
+.streak-tier-strong {
+  box-shadow: 0 0 12px var(--nec-blueGlow);
+  border-color: rgba(30,107,255,0.3) !important;
+}
+/* 30-99: subtle gold border (no static glow — glow only via streak-glow animation) */
+.streak-tier-gold {
+  border-color: rgba(198,168,74,0.35) !important;
+}
+/* 100+: animated shimmer border (very subtle) */
+.streak-tier-legend {
+  animation: streakPopIn 250ms ease-out forwards, streakShimmer 2.5s ease-in-out infinite;
+  border-color: rgba(212,175,55,0.4) !important;
+}
+
+/* Dashboard gamification */
+@keyframes streakFlamePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.9; transform: scale(1.05); }
+}
+
+@keyframes streakGoldGlow {
+  0%, 100% { text-shadow: 0 0 12px rgba(198,168,74,0.35); }
+  50%      { text-shadow: 0 0 20px rgba(198,168,74,0.5); }
+}
+
+.dashboard-streak-flame {
+  animation: streakFlamePulse 2s ease-in-out infinite;
+}
+
+.dashboard-streak-glow {
+  animation: streakGoldGlow 2.5s ease-in-out infinite;
+}
+
+/* XP bar fill animation — subtle ease-out */
+@keyframes xpBarFill {
+  from { transform: scaleX(0); box-shadow: 0 0 8px var(--nec-blueGlow); }
+  to { transform: scaleX(1); box-shadow: 0 0 6px var(--nec-blueGlow); }
+}
+
+.nec-xp-bar-fill {
+  transform-origin: left;
+  animation: xpBarFill 400ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nec-xp-bar-fill {
+    animation: none;
+    transform: scaleX(1);
+  }
+  .nec-option-press,
+  .nec-correct-glow,
+  .nec-incorrect-pulse,
+  .nec-explain-fade,
+  .nec-label-slide,
+  .nec-page-fade,
+  .nec-end-score,
+  .nec-end-xp,
+  .nec-end-bar,
+  .nec-end-streak {
+    animation: none !important;
+  }
+  .nec-end-xp,
+  .nec-end-bar,
+  .nec-end-streak,
+  .nec-level-up-text {
+    opacity: 1 !important;
+  }
+  .nec-level-gold-flash {
+    animation: none !important;
+  }
+}
+
+/* Option selection — tactile press (120ms) */
+@keyframes necOptionPress {
+  0% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+.nec-option-press {
+  animation: necOptionPress 120ms ease-out forwards;
+}
+
+/* Correct reveal — blue border glow 250ms */
+@keyframes necCorrectGlow {
+  0% { box-shadow: 0 0 0 var(--nec-blueGlow), inset 0 1px 2px rgba(0,0,0,0.15); }
+  50% { box-shadow: 0 0 14px var(--nec-blueGlow), inset 0 1px 2px rgba(0,0,0,0.15); }
+  100% { box-shadow: 0 0 6px var(--nec-blueGlow), inset 0 1px 2px rgba(0,0,0,0.15); }
+}
+
+.nec-correct-glow {
+  animation: necCorrectGlow 250ms ease-out forwards;
+}
+
+/* Incorrect reveal — red border pulse 200ms */
+@keyframes necIncorrectPulse {
+  0% { box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 0 rgba(239,68,68,0); }
+  50% { box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 10px rgba(239,68,68,0.25); }
+  100% { box-shadow: inset 0 1px 2px rgba(0,0,0,0.2), 0 0 0 rgba(239,68,68,0); }
+}
+
+.nec-incorrect-pulse {
+  animation: necIncorrectPulse 200ms ease-out forwards;
+}
+
+/* Explanation block fade in */
+@keyframes necExplainFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.nec-explain-fade {
+  animation: necExplainFade 200ms ease-out forwards;
+}
+
+/* Correct label slide up 8px */
+@keyframes necLabelSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.nec-label-slide {
+  animation: necLabelSlideUp 200ms ease-out forwards;
+}
+
+/* Page/content fade transition */
+@keyframes necPageFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.nec-page-fade {
+  animation: necPageFade 150ms ease-out forwards;
+}
+
+/* End screen staged sequence delays */
+.nec-end-score { animation: necPageFade 200ms ease-out forwards; }
+.nec-end-xp { animation: necPageFade 200ms ease-out forwards; animation-delay: 150ms; animation-fill-mode: both; }
+.nec-end-bar { animation: necPageFade 200ms ease-out forwards; animation-delay: 300ms; animation-fill-mode: both; }
+.nec-end-streak { animation: necPageFade 200ms ease-out forwards; animation-delay: 450ms; animation-fill-mode: both; }
+
+/* Level-up gold flash (300ms) */
+@keyframes necLevelGoldFlash {
+  0% { color: rgba(255,255,255,0.9); }
+  30% { color: var(--nec-gold2); text-shadow: 0 0 12px var(--nec-goldGlow); }
+  100% { color: rgba(255,255,255,0.9); text-shadow: none; }
+}
+
+.nec-level-gold-flash {
+  animation: necLevelGoldFlash 300ms ease-out forwards;
+}
+
+.nec-level-up-text {
+  animation: necPageFade 200ms ease-out forwards;
+  animation-delay: 200ms;
+  animation-fill-mode: both;
+  opacity: 0;
+}
+
+.dashboard-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+}
+
+.dashboard-article-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+.dashboard-start-btn {
+  transition: transform 100ms ease-out, box-shadow 150ms ease-out;
+}
+
+.dashboard-start-btn:hover {
+  box-shadow: 0 0 24px var(--nec-blueGlow);
+}
+
+.nec-btn-primary {
+  transition: transform 100ms ease-out, box-shadow 150ms ease-out;
+}
+
+.nec-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px var(--nec-blueGlow);
+}
+
+.nec-btn-primary:active {
+  transform: scale(0.97) translateY(0);
+  transition: transform 100ms ease-out;
+}
+
+.dashboard-start-btn:active {
+  transform: scale(0.97) translateY(0);
+  transition: transform 100ms ease-out;
+}
+
+.nec-btn-secondary {
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.nec-btn-secondary:hover {
+  border-color: rgba(255,255,255,0.25);
+  box-shadow: 0 0 12px rgba(30,107,255,0.15);
+}
+
+.nec-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.dashboard-rank-badge:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 16px var(--nec-blueGlow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-streak-flame,
+  .dashboard-streak-glow,
+  .dashboard-card:hover,
+  .dashboard-article-row:hover,
+  .dashboard-start-btn:hover,
+  .dashboard-rank-badge:hover {
+    animation: none !important;
+    transform: none !important;
+  }
+}
