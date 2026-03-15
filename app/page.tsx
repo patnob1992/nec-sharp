@@ -617,7 +617,11 @@ export default function Home() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sessionQuestionIds, setSessionQuestionIds] = useState<string[]>([])
   const [questionIndex, setQuestionIndex] = useState(0)
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null)
+  const [nextQuestion, setNextQuestion] = useState<Question | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
+  const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [isQuestionTransitioning, setIsQuestionTransitioning] = useState(false)
   const [score, setScore] = useState(0)
   const [missedIds, setMissedIds] = useState<string[]>([])
   const [mode, setMode] = useState<QuizMode>("quiz")
@@ -634,10 +638,11 @@ export default function Home() {
   const questionsRef = useRef<Question[]>([])
   const sessionStartedLoggedRef = useRef(false)
   const userRef = useRef<string | null>(null)
+  const optionOrderCacheRef = useRef<Map<string, { options: string[]; correctIndex: number }>>(new Map())
 
   const dayKey = getDayKey()
   const currentQuestionId = sessionQuestionIds[questionIndex]
-  const question = currentQuestionId ? getQuestionById(questions, currentQuestionId) : null
+  const question = currentQuestion
   const sessionSize = sessionQuestionIds.length
 
   questionsRef.current = questions
@@ -651,24 +656,61 @@ export default function Home() {
   const effectiveCorrectIndex = useShuffled ? shuffledCorrectIndex : question?.correctIndex ?? 0
   const displayOptions = useShuffled ? shuffledOptions : question?.options ?? []
   const result = useMemo(() => {
-    if (selected === null || !question) return null
+    if (!hasSubmitted || selected === null || !question) return null
     return selected === effectiveCorrectIndex ? "correct" : "wrong"
-  }, [selected, question, effectiveCorrectIndex])
+  }, [hasSubmitted, selected, question, effectiveCorrectIndex])
+
+  useEffect(() => {
+    const currentId = sessionQuestionIds[questionIndex]
+    const nextId = sessionQuestionIds[questionIndex + 1]
+    setCurrentQuestion(currentId ? getQuestionById(questions, currentId) : null)
+    setNextQuestion(nextId ? getQuestionById(questions, nextId) : null)
+  }, [questionIndex, sessionQuestionIds, questionsKey])
 
   useEffect(() => {
     if (!question) return
-    const dailySeed = getOrCreateOptionSeed(dayKey)
-    const perQuestionSeed = hashStringToUint32(dailySeed + "::" + question.id)
-    const rng = mulberry32(perQuestionSeed)
-    const indices = question.options.map((_, i) => i)
-    const shuffledIndices = shuffleWithRng(indices, rng)
-    const shuffled = shuffledIndices.map((i) => question.options[i])
-    const correctIdx = shuffledIndices.indexOf(question.correctIndex)
-    setShuffledOptions(shuffled)
-    setShuffledCorrectIndex(correctIdx >= 0 ? correctIdx : 0)
+    const cached = optionOrderCacheRef.current.get(question.id)
+    if (cached) {
+      setShuffledOptions(cached.options)
+      setShuffledCorrectIndex(cached.correctIndex)
+    } else {
+      const dailySeed = getOrCreateOptionSeed(dayKey)
+      const perQuestionSeed = hashStringToUint32(dailySeed + "::" + question.id)
+      const rng = mulberry32(perQuestionSeed)
+      const indices = question.options.map((_, i) => i)
+      const shuffledIndices = shuffleWithRng(indices, rng)
+      const shuffled = shuffledIndices.map((i) => question.options[i])
+      const correctIdx = shuffledIndices.indexOf(question.correctIndex)
+      const bundle = { options: shuffled, correctIndex: correctIdx >= 0 ? correctIdx : 0 }
+      optionOrderCacheRef.current.set(question.id, bundle)
+      setShuffledOptions(bundle.options)
+      setShuffledCorrectIndex(bundle.correctIndex)
+    }
     setShuffledForQuestionId(question.id)
     setSelected(null)
   }, [currentQuestionId, question, dayKey])
+
+  useEffect(() => {
+    if (!nextQuestion) return
+    if (optionOrderCacheRef.current.has(nextQuestion.id)) return
+    const dailySeed = getOrCreateOptionSeed(dayKey)
+    const perQuestionSeed = hashStringToUint32(dailySeed + "::" + nextQuestion.id)
+    const rng = mulberry32(perQuestionSeed)
+    const indices = nextQuestion.options.map((_, i) => i)
+    const shuffledIndices = shuffleWithRng(indices, rng)
+    const shuffled = shuffledIndices.map((i) => nextQuestion.options[i])
+    const correctIdx = shuffledIndices.indexOf(nextQuestion.correctIndex)
+    optionOrderCacheRef.current.set(nextQuestion.id, {
+      options: shuffled,
+      correctIndex: correctIdx >= 0 ? correctIdx : 0,
+    })
+  }, [nextQuestion, dayKey])
+
+  useEffect(() => {
+    if (selected === null) {
+      setHasSubmitted(false)
+    }
+  }, [selected])
 
   const advanceToNext = useCallback(
     async (scoreOverride?: number) => {
@@ -956,19 +998,14 @@ export default function Home() {
     }
   }, [question, sessionRepairing, completed, reviewComplete, mode])
 
-  useEffect(() => {
-    if (result !== "correct" || !question || mode === "complete") return
-    const t = setTimeout(() => {
-      const newScore = score + 1
-      setScore(newScore)
-      advanceToNext(newScore)
-    }, 2200)
-    return () => clearTimeout(t)
-  }, [result, question, mode, score, advanceToNext])
-
   const handleSelect = (index: number) => {
-    if (selected !== null || !question) return
-    setSelected(index)
+    if (hasSubmitted || !question) return
+    if (selected !== index) {
+      setSelected(index)
+      return
+    }
+    setHasSubmitted(true)
+
     const isCorrect = index === effectiveCorrectIndex
     if (!isReviewMode) {
       recordArticleAttemptProgression(question.article, isCorrect)
@@ -981,6 +1018,12 @@ export default function Home() {
       if (isCorrect) {
         removeFromWrongQueue(question.id)
       }
+    }
+    if (isCorrect) {
+      setScore((prev) => prev + 1)
+    }
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(isCorrect ? 50 : [30, 40, 30])
     }
     if (!isCorrect) {
       const newMissed = missedIds.includes(question.id) ? missedIds : [...missedIds, question.id]
@@ -996,6 +1039,33 @@ export default function Home() {
       }
     }
   }
+
+  const handleNextQuestion = useCallback(async () => {
+    if (isQuestionTransitioning) return
+    setIsQuestionTransitioning(true)
+    if (nextQuestion) {
+      setCurrentQuestion(nextQuestion)
+      const upcomingId = sessionQuestionIds[questionIndex + 2]
+      const upcomingQuestion = upcomingId ? getQuestionById(questionsRef.current, upcomingId) : null
+      setNextQuestion(upcomingQuestion)
+      if (upcomingQuestion && !optionOrderCacheRef.current.has(upcomingQuestion.id)) {
+        const dailySeed = getOrCreateOptionSeed(dayKey)
+        const perQuestionSeed = hashStringToUint32(dailySeed + "::" + upcomingQuestion.id)
+        const rng = mulberry32(perQuestionSeed)
+        const indices = upcomingQuestion.options.map((_, i) => i)
+        const shuffledIndices = shuffleWithRng(indices, rng)
+        const shuffled = shuffledIndices.map((i) => upcomingQuestion.options[i])
+        const correctIdx = shuffledIndices.indexOf(upcomingQuestion.correctIndex)
+        optionOrderCacheRef.current.set(upcomingQuestion.id, {
+          options: shuffled,
+          correctIndex: correctIdx >= 0 ? correctIdx : 0,
+        })
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    await advanceToNext()
+    setTimeout(() => setIsQuestionTransitioning(false), 150)
+  }, [advanceToNext, isQuestionTransitioning, nextQuestion, questionIndex, sessionQuestionIds, dayKey])
 
   const startReviewMissed = () => {
     if (missedIds.length === 0) return
@@ -1758,13 +1828,15 @@ export default function Home() {
     <main
       className="nec-page-fade"
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: "linear-gradient(180deg, var(--nec-bg) 0%, var(--nec-bg2) 100%)",
         color: "white",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 20,
+        padding: hasSubmitted
+          ? "max(16px, env(safe-area-inset-top)) 16px calc(116px + env(safe-area-inset-bottom))"
+          : "max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom))",
         fontFamily:
           'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
       }}
@@ -1851,45 +1923,55 @@ export default function Home() {
             background: "var(--nec-card)",
             border: "1px solid var(--nec-border)",
             borderRadius: 20,
-            padding: 24,
+            padding: "20px 18px",
             boxShadow: "var(--nec-shadow-2)",
+            opacity: isQuestionTransitioning ? 0.45 : 1,
+            transform: isQuestionTransitioning ? "translateY(6px)" : "translateY(0)",
+            transition: "opacity 150ms ease-out, transform 150ms ease-out",
           }}
         >
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 10, letterSpacing: "0.05em" }}>
               Multiple Choice
             </div>
-            <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.3, letterSpacing: "-0.02em" }}>{question.question}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.35, letterSpacing: "-0.02em" }}>{question.question}</div>
           </div>
 
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 12 }}>
             {displayOptions.map((option, index) => {
               const isCorrect = index === effectiveCorrectIndex
               const isSelected = index === selected
-              const showState = selected !== null
+              const showState = hasSubmitted
               const bg =
                 showState && isCorrect
-                  ? "rgba(30,107,255,0.06)"
+                  ? "rgba(34,197,94,0.12)"
                   : showState && isSelected && !isCorrect
                     ? "rgba(239,68,68,0.05)"
+                    : !showState && isSelected
+                      ? "rgba(30,107,255,0.12)"
                     : "rgba(255,255,255,0.03)"
               const border =
                 showState && isCorrect
-                  ? "2px solid var(--nec-blue)"
+                  ? "2px solid rgba(34,197,94,0.7)"
                   : showState && isSelected && !isCorrect
                     ? "2px solid rgba(239,68,68,0.6)"
+                    : !showState && isSelected
+                      ? "2px solid var(--nec-blue)"
                     : "1px solid rgba(255,255,255,0.08)"
               const boxShadow =
                 showState && isCorrect
                   ? "inset 0 1px 2px rgba(0,0,0,0.15)"
                   : showState && isSelected && !isCorrect
                     ? "inset 0 1px 2px rgba(0,0,0,0.2)"
+                    : !showState && isSelected
+                      ? "inset 0 1px 2px rgba(0,0,0,0.15)"
                     : "none"
               const color =
-                showState && (isCorrect || isSelected) ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.88)"
+                (showState && (isCorrect || isSelected)) || (!showState && isSelected)
+                  ? "rgba(255,255,255,0.95)"
+                  : "rgba(255,255,255,0.88)"
               const optionClasses = [
                 showState && (isCorrect || isSelected) && "nec-option-press",
-                showState && isCorrect && "nec-correct-glow",
                 showState && isSelected && !isCorrect && "nec-incorrect-pulse",
               ]
                 .filter(Boolean)
@@ -1899,18 +1981,19 @@ export default function Home() {
                 <button
                   key={index}
                   onClick={() => handleSelect(index)}
-                  disabled={selected !== null}
+                  disabled={hasSubmitted}
                   className={optionClasses || undefined}
                   style={{
                     textAlign: "left",
-                    padding: "14px 14px",
-                    borderRadius: 14,
+                    padding: "16px 14px",
+                    minHeight: 56,
+                    borderRadius: 12,
                     background: bg,
                     border,
                     boxShadow,
                     color,
-                    cursor: selected === null ? "pointer" : "default",
-                    transition: "background 150ms ease-out, border 150ms ease-out",
+                    cursor: hasSubmitted ? "default" : "pointer",
+                    transition: "all 150ms ease",
                     display: "flex",
                     gap: 12,
                     alignItems: "flex-start",
@@ -1934,24 +2017,24 @@ export default function Home() {
                   >
                     {String.fromCharCode(65 + index)}
                   </span>
-                  <span style={{ lineHeight: 1.25 }}>{option}</span>
+                  <span style={{ lineHeight: 1.4, fontSize: 17 }}>{option}</span>
                 </button>
               )
             })}
           </div>
 
-          {selected !== null && (
+          {hasSubmitted && selected !== null && (
             <div
               className="nec-explain-fade"
               style={{
-                marginTop: 16,
+                marginTop: 20,
                 padding: 14,
                 borderRadius: 14,
                 background:
-                  result === "correct" ? "rgba(30,107,255,0.06)" : "rgba(239,68,68,0.05)",
+                  result === "correct" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.05)",
                 border:
                   result === "correct"
-                    ? "1px solid rgba(30,107,255,0.3)"
+                    ? "1px solid rgba(34,197,94,0.4)"
                     : "1px solid rgba(239,68,68,0.25)",
               }}
             >
@@ -1959,13 +2042,13 @@ export default function Home() {
                 className="nec-label-slide"
                 style={{
                   fontWeight: 800,
-                  marginBottom: 6,
-                  color: result === "correct" ? "var(--nec-blue)" : "rgba(239,68,68,0.9)",
+                  marginBottom: 8,
+                  color: result === "correct" ? "rgba(34,197,94,0.95)" : "rgba(239,68,68,0.9)",
                 }}
               >
                 {result === "correct" ? "Correct" : "Not quite"}
               </div>
-              <div style={{ color: "rgba(255,255,255,0.85)", lineHeight: 1.45 }}>
+              <div style={{ color: "rgba(255,255,255,0.85)", lineHeight: 1.5, fontSize: 15.5 }}>
                 {question.explanation}
               </div>
               {question.code_reference && (
@@ -1980,30 +2063,45 @@ export default function Home() {
                   Reference: {question.code_reference}
                 </div>
               )}
-              {result === "wrong" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    advanceToNext()
-                  }}
+              {result !== null && (
+                <div
                   style={{
-                    marginTop: 14,
-                    padding: "10px 16px",
-                    borderRadius: 12,
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    color: "rgba(255,255,255,0.9)",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    transition: "background 120ms ease",
+                    position: "fixed",
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 1200,
+                    padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
+                    background: "linear-gradient(180deg, rgba(11,18,32,0.15) 0%, rgba(11,18,32,0.92) 100%)",
+                    backdropFilter: "blur(6px)",
                   }}
                 >
-                  Next Question →
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleNextQuestion}
+                    style={{
+                      width: "100%",
+                      maxWidth: 420,
+                      margin: "0 auto",
+                      padding: "14px 16px",
+                      minHeight: 54,
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      color: "rgba(255,255,255,0.9)",
+                      fontSize: 15,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      transition: "background 150ms ease-out, transform 150ms ease-out",
+                    }}
+                  >
+                    Next Question →
+                  </button>
+                </div>
               )}
             </div>
           )}
