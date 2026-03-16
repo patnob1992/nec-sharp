@@ -295,6 +295,20 @@ body {
   animation: necPageFade 150ms ease-out forwards;
 }
 
+.question-card {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.question-exit {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.question-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+}
+
 /* End screen staged sequence delays */
 .nec-end-score { animation: necPageFade 200ms ease-out forwards; }
 .nec-end-xp { animation: necPageFade 200ms ease-out forwards; animation-delay: 150ms; animation-fill-mode: both; }

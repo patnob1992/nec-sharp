@@ -61,16 +61,22 @@ export default function AdminPage() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
+      let sessionData: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"] | null = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        sessionData = data;
+      } catch (error) {
+        console.error("[admin] getSession failed:", error);
+      }
+      if (!sessionData?.session) {
         router.replace("/login");
         return;
       }
-      if (!isAdmin(data.session.user.email ?? undefined)) {
+      if (!isAdmin(sessionData.session.user.email ?? undefined)) {
         router.replace("/dashboard");
         return;
       }
-      setUser({ id: data.session.user.id, email: data.session.user.email ?? undefined });
+      setUser({ id: sessionData.session.user.id, email: sessionData.session.user.email ?? undefined });
       await fetchQuestions();
       setLoading(false);
     })();

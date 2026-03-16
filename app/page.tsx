@@ -357,12 +357,18 @@ export default function Home() {
 
   useEffect(() => {
     ;(async () => {
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) {
+      let sessionData: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"] | null = null
+      try {
+        const { data } = await supabase.auth.getSession()
+        sessionData = data
+      } catch (error) {
+        console.error("[quiz-init] getSession failed:", error)
+      }
+      if (!sessionData?.session) {
         router.replace("/login")
         return
       }
-      userRef.current = data.session.user.id
+      userRef.current = sessionData.session.user.id
       const xp = getXp()
       const { level } = getLevelFromXpProgression(xp)
       setUserLevel(Math.max(1, level))
@@ -448,7 +454,13 @@ export default function Home() {
       rankUp: boolean
       newRankName: string | null
     } | null> => {
-      const { data: { session } } = await supabase.auth.getSession()
+      let session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"] | null = null
+      try {
+        const { data } = await supabase.auth.getSession()
+        session = data.session
+      } catch (error) {
+        console.error("[finishSession] getSession failed:", error)
+      }
       const user = session?.user
       if (!user) return null
 
@@ -617,6 +629,8 @@ export default function Home() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sessionQuestionIds, setSessionQuestionIds] = useState<string[]>([])
   const [questionIndex, setQuestionIndex] = useState(0)
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null)
+  const [nextQuestion, setNextQuestion] = useState<Question | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [hasSubmitted, setHasSubmitted] = useState(false)
   const [isQuestionTransitioning, setIsQuestionTransitioning] = useState(false)
@@ -636,18 +650,36 @@ export default function Home() {
   const questionsRef = useRef<Question[]>([])
   const sessionStartedLoggedRef = useRef(false)
   const userRef = useRef<string | null>(null)
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const dayKey = getDayKey()
   const currentQuestionId = sessionQuestionIds[questionIndex]
-  const question = currentQuestionId ? getQuestionById(questions, currentQuestionId) : null
+  const question = currentQuestion
   const sessionSize = sessionQuestionIds.length
 
   questionsRef.current = questions
+
+  const preloadNextQuestion = useCallback(() => {
+    const nextId = sessionQuestionIds[questionIndex + 1]
+    setNextQuestion(nextId ? getQuestionById(questionsRef.current, nextId) ?? null : null)
+  }, [questionIndex, sessionQuestionIds])
 
   const questionsKey = useMemo(
     () => (questions.length === 0 ? "empty" : `${questions.length}:${questions.map((q) => q.id).join(",")}`),
     [questions]
   )
+
+  useEffect(() => {
+    const id = sessionQuestionIds[questionIndex]
+    setCurrentQuestion(id ? getQuestionById(questions, id) ?? null : null)
+    const nextId = sessionQuestionIds[questionIndex + 1]
+    setNextQuestion(nextId ? getQuestionById(questions, nextId) ?? null : null)
+  }, [questionIndex, sessionQuestionIds, questionsKey])
+
+  useEffect(() => {
+    if (!currentQuestion) return
+    preloadNextQuestion()
+  }, [currentQuestion, preloadNextQuestion])
 
   const useShuffled = shuffledForQuestionId === currentQuestionId && shuffledOptions.length > 0
   const effectiveCorrectIndex = useShuffled ? shuffledCorrectIndex : question?.correctIndex ?? 0
@@ -705,7 +737,17 @@ export default function Home() {
         }
         return
       }
-      setQuestionIndex(nextIndex)
+      const nextId = sessionQuestionIds[questionIndex + 1]
+      setCurrentQuestion(nextQuestion ?? (nextId ? getQuestionById(questionsRef.current, nextId) ?? null : null))
+
+      const preloadId = sessionQuestionIds[questionIndex + 2]
+      if (preloadId) {
+        setNextQuestion(getQuestionById(questionsRef.current, preloadId) ?? null)
+      } else {
+        setNextQuestion(null)
+      }
+
+      setQuestionIndex((prev) => prev + 1)
       setSelected(null)
       if (!isReviewMode) {
         setStoredTodayProgress({
@@ -716,7 +758,7 @@ export default function Home() {
         })
       }
     },
-    [questionIndex, sessionQuestionIds.length, isReviewMode, dayKey, score, missedIds, finishSession]
+    [questionIndex, sessionQuestionIds, sessionQuestionIds.length, isReviewMode, dayKey, score, missedIds, finishSession, nextQuestion]
   )
 
   useEffect(() => {
@@ -970,49 +1012,85 @@ export default function Home() {
       setSelected(index)
       return
     }
+    const submittedQuestion = question
+    const isCorrect = index === effectiveCorrectIndex
+    const newMissed = !isCorrect && !missedIds.includes(submittedQuestion.id) ? [...missedIds, submittedQuestion.id] : missedIds
+
+    // Optimistic UI: reveal feedback immediately.
+    setSelected(index)
     setHasSubmitted(true)
 
-    const isCorrect = index === effectiveCorrectIndex
-    if (!isReviewMode) {
-      recordArticleAttemptProgression(question.article, isCorrect)
-      const qId = parseInt(question.id, 10)
-      if (!isNaN(qId)) {
-        applyQuestionResult(qId, isCorrect).catch(() => {
-          /* allow user to continue; RPC failure logged in applyQuestionResult */
-        })
-      }
-      if (isCorrect) {
-        removeFromWrongQueue(question.id)
-      }
-    }
-    if (isCorrect) {
-      setScore((prev) => prev + 1)
-    }
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
       navigator.vibrate(isCorrect ? 50 : [30, 40, 30])
     }
-    if (!isCorrect) {
-      const newMissed = missedIds.includes(question.id) ? missedIds : [...missedIds, question.id]
-      setMissedIds(newMissed)
-      if (!isReviewMode) {
-        addToWrongQueueCapped(question.id)
-        setStoredTodayProgress({
-          dayKey,
-          score,
-          missedIds: newMissed,
-          completedCount: questionIndex + 1,
-        })
+
+    // Keep XP/stats/backend updates in the background so UI never waits on them.
+    setTimeout(() => {
+      try {
+        if (!isReviewMode) {
+          recordArticleAttemptProgression(submittedQuestion.article, isCorrect)
+          const qId = parseInt(submittedQuestion.id, 10)
+          if (!isNaN(qId)) {
+            applyQuestionResult(qId, isCorrect).catch((error) => {
+              console.error("[quiz] applyQuestionResult failed:", error)
+            })
+          }
+          if (isCorrect) {
+            removeFromWrongQueue(submittedQuestion.id)
+          }
+        }
+
+        if (isCorrect) {
+          setScore((prev) => prev + 1)
+        } else {
+          setMissedIds(newMissed)
+          if (!isReviewMode) {
+            addToWrongQueueCapped(submittedQuestion.id)
+            setStoredTodayProgress({
+              dayKey,
+              score,
+              missedIds: newMissed,
+              completedCount: questionIndex + 1,
+            })
+          }
+        }
+      } catch (error) {
+        console.error("[quiz] background submit updates failed:", error)
       }
-    }
+    }, 0)
   }
 
-  const handleNextQuestion = useCallback(async () => {
+  const handleNextQuestion = useCallback(() => {
     if (isQuestionTransitioning) return
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = null
+    }
     setIsQuestionTransitioning(true)
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    await advanceToNext()
-    setTimeout(() => setIsQuestionTransitioning(false), 150)
+    requestAnimationFrame(() => {
+      void advanceToNext().then(() => {
+        requestAnimationFrame(() => setIsQuestionTransitioning(false))
+      })
+    })
   }, [advanceToNext, isQuestionTransitioning])
+
+  useEffect(() => {
+    if (!hasSubmitted || !result || !question || mode === "complete" || completed || reviewComplete) return
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = null
+    }
+    const delayMs = result === "correct" ? 800 : 1500
+    autoAdvanceTimerRef.current = setTimeout(() => {
+      handleNextQuestion()
+    }, delayMs)
+    return () => {
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current)
+        autoAdvanceTimerRef.current = null
+      }
+    }
+  }, [hasSubmitted, result, question, mode, completed, reviewComplete, handleNextQuestion])
 
   const startReviewMissed = () => {
     if (missedIds.length === 0) return
@@ -1864,17 +1942,13 @@ export default function Home() {
         </div>
 
         <div
-          key={questionIndex}
-          className="nec-page-fade"
+          className={`nec-page-fade question-card ${isQuestionTransitioning ? "question-exit" : "question-enter-active"}`}
           style={{
             background: "var(--nec-card)",
             border: "1px solid var(--nec-border)",
             borderRadius: 20,
             padding: "20px 18px",
             boxShadow: "var(--nec-shadow-2)",
-            opacity: isQuestionTransitioning ? 0.45 : 1,
-            transform: isQuestionTransitioning ? "translateY(6px)" : "translateY(0)",
-            transition: "opacity 150ms ease-out, transform 150ms ease-out",
           }}
         >
           <div style={{ marginBottom: 24 }}>
