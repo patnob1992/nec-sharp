@@ -15,6 +15,7 @@ import { hasProAccess, type UserProStatus } from "@/lib/features";
 import { trackBetaUsage } from "@/lib/betaUsage";
 import { FeedbackModal } from "@/app/components/FeedbackModal";
 import { CodeCoverageModalBody } from "@/app/components/CodeCoverageModalBody";
+import { InstallPromptBanner } from "@/app/components/InstallPromptBanner";
 
 const STREAK_MILESTONE = 5;
 const TODAY_GOAL_QUESTIONS = 5;
@@ -724,6 +725,7 @@ export default function DashboardPage() {
           >
             Sign out
           </button>
+          <InstallPromptBanner />
         </div>
       </div>
 

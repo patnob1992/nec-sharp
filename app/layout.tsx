@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "NEC Sharp",
-  description: "Daily NEC training to stay sharp.",
+  description: "Daily NEC code training for electricians.",
   manifest: "/manifest.webmanifest",
   applicationName: "NEC Sharp",
   appleWebApp: {
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1220",
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({

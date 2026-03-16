@@ -4,11 +4,11 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "NEC Sharp",
     short_name: "NEC Sharp",
-    description: "Daily NEC training to stay sharp.",
+    description: "Daily NEC code training for electricians.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0B1220",
-    theme_color: "#0B1220",
+    background_color: "#0f172a",
+    theme_color: "#0f172a",
     icons: [
       {
         src: "/icons/icon-192.png",
