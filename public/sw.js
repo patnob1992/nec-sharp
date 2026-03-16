@@ -1,11 +1,12 @@
-self.addEventListener("install", () => {
+self.addEventListener("install", (event) => {
+  console.log("Service worker installing...");
   self.skipWaiting();
 });
 
-self.addEventListener("activate", () => {
-  console.log("Service worker active.");
+self.addEventListener("activate", (event) => {
+  console.log("Service worker activating...");
 });
 
-self.addEventListener("fetch", () => {
-  // allow normal network behavior
+self.addEventListener("fetch", (event) => {
+  event.respondWith(fetch(event.request));
 });
