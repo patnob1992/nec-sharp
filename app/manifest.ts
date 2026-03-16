@@ -2,10 +2,12 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/dashboard",
     name: "NEC Sharp",
     short_name: "NEC Sharp",
     description: "Daily NEC code training for electricians.",
     start_url: "/dashboard",
+    scope: "/",
     display: "standalone",
     background_color: "#0f172a",
     theme_color: "#0f172a",
