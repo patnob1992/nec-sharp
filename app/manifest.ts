@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "NEC Sharp",
     short_name: "NEC Sharp",
     description: "Daily NEC code training for electricians.",
-    start_url: "/",
+    start_url: "/dashboard",
     display: "standalone",
     background_color: "#0f172a",
     theme_color: "#0f172a",
